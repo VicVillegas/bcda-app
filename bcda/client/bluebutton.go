@@ -86,7 +86,11 @@ func NewBlueButtonClient() (*BlueButtonClient, error) {
 	}
 
 	tlsConfig.BuildNameToCertificate()
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{
+		TLSClientConfig:       tlsConfig,
+		ExpectContinueTimeout: 4 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+	}
 	var timeout int
 	if timeout, err = strconv.Atoi(os.Getenv("BB_TIMEOUT_MS")); err != nil {
 		logger.Info("Could not get Blue Button timeout from environment variable; using default value of 500.")
