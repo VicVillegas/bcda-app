@@ -1,11 +1,13 @@
 package client
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -201,12 +203,27 @@ func (bbc *BlueButtonClient) tryRequest(req *http.Request) (string, error) {
 		return "", fmt.Errorf("error from request %s: %s", req.Header.Get("BlueButton-OriginalQueryId"), resp.Status)
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", errors.Wrapf(err, "error reading response from request %s", req.Header.Get("BlueButton-OriginalQueryId"))
+	// https://medium.com/@simonfrey/go-as-in-golang-standard-net-http-config-will-break-your-production-environment-1360871cb72b
+	timer := time.AfterFunc(5*time.Second, func() {
+		_ = resp.Body.Close()
+	})
+
+	buf := bytes.NewBuffer(make([]byte, 0))
+	for {
+		//We reset the timer, for the variable time
+		timer.Reset(1 * time.Second)
+
+		_, err = io.CopyN(buf, resp.Body, 256)
+		if err == io.EOF {
+			// This is not an error in the common sense
+			// io.EOF tells us, that we did read the complete body
+			break
+		} else if err != nil {
+			return "", errors.Wrapf(err, "error reading response from request %s", req.Header.Get("BlueButton-OriginalQueryId"))
+		}
 	}
 
-	return string(data), nil
+	return buf.String(), nil
 }
 
 func logRequest(req *http.Request) {
