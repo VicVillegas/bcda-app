@@ -119,15 +119,15 @@
   revision = "39bbc98d99d7b666759f84514859becf8067128f"
 
 [[projects]]
-  digest = "1:6895fbe5a10c5aebd1965cac6f6905dcdb21bee01e08912d3ba6a805c2485f6a"
+  digest = "1:a0216296da5c3191358b114fa8d2490477f5dff7380541551495b4f2a16989b3"
   name = "github.com/jinzhu/gorm"
   packages = [
     ".",
     "dialects/postgres",
   ]
   pruneopts = "UT"
-  revision = "6ed508ec6a4ecb3531899a69cbc746ccf65a4166"
-  version = "v1.9.1"
+  revision = "81c17a7e2529c59efc4e74c5b32c1fb71fb12fa2"
+  version = "v1.9.11"
 
 [[projects]]
   branch = "master"
@@ -272,6 +272,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:c23351440f9d2affc0383224880063d8e5d770fd26806caaefce4ec64ec3f613"
+  name = "github.com/t-tiger/gorm-bulk-insert"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "9f37f726f5b1cb8b7499e8d2a05fd3041715ed94"
+
+[[projects]]
+  branch = "master"
   digest = "1:be87c1e6f0a15e5b1c45036b9382cdd63057a8b65e10ff2fe2bda23886a99c6a"
   name = "github.com/tsenart/go-tsz"
   packages = [
@@ -389,6 +397,7 @@
     "github.com/stretchr/testify/mock",
     "github.com/stretchr/testify/require",
     "github.com/stretchr/testify/suite",
+    "github.com/t-tiger/gorm-bulk-insert",
     "github.com/tsenart/vegeta/lib",
     "github.com/tsenart/vegeta/lib/plot",
     "github.com/urfave/cli",

@@ -15,6 +15,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	gormbulk "github.com/t-tiger/gorm-bulk-insert"
 
 	"github.com/CMSgov/bcda-app/bcda/constants"
 	"github.com/CMSgov/bcda-app/bcda/database"
@@ -137,22 +138,40 @@ func importCCLF0(fileMetadata *cclfFileMetadata) (map[string]cclfFileValidator, 
 	return validator, nil
 }
 
+func saveBeneficiaries(beneficiaries []interface{}) error {
+	db := database.GetGORMDbConnection()
+	defer database.Close(db)
+
+	// Maximum batch size of 3000 recommended by library developer
+	err := gormbulk.BulkInsert(db, beneficiaries, 3000, "CCLFFile")
+	if err != nil {
+		fmt.Println("Could not create CCLF8 beneficiary records.")
+		err = errors.Wrap(err, "could not create CCLF8 beneficiary records")
+		log.Error(err)
+		return err
+	}
+	return nil
+}
+
 func importCCLF8(fileMetadata *cclfFileMetadata) error {
+	// Using []interface{} because it's required by gormbulk
+	var beneBuffer []interface{}
+
 	err := importCCLF(fileMetadata, func(fileID uint, b []byte, db *gorm.DB) error {
 		const (
 			mbiStart, mbiEnd   = 0, 11
 			hicnStart, hicnEnd = 11, 22
 		)
-		cclfBeneficiary := &models.CCLFBeneficiary{
+		cclfBeneficiary := models.CCLFBeneficiary{
 			FileID: fileID,
 			MBI:    string(bytes.TrimSpace(b[mbiStart:mbiEnd])),
 			HICN:   string(bytes.TrimSpace(b[hicnStart:hicnEnd])),
 		}
-		err := db.Create(cclfBeneficiary).Error
-		if err != nil {
-			fmt.Println("Could not create CCLF8 beneficiary record.")
-			err = errors.Wrap(err, "could not create CCLF8 beneficiary record")
-			log.Error(err)
+		beneBuffer = append(beneBuffer, cclfBeneficiary)
+		// Using maximum batch size recommended by library
+		if len(beneBuffer) == 3000 {
+			err := saveBeneficiaries(beneBuffer)
+			beneBuffer = []interface{}{}
 			return err
 		}
 		return nil
@@ -162,6 +181,14 @@ func importCCLF8(fileMetadata *cclfFileMetadata) error {
 		updateImportStatus(fileMetadata, constants.ImportFail)
 		return err
 	}
+
+	// Save any remaining beneficiaries
+	err = saveBeneficiaries(beneBuffer)
+	if err != nil {
+		updateImportStatus(fileMetadata, constants.ImportFail)
+		return err
+	}
+
 	updateImportStatus(fileMetadata, constants.ImportComplete)
 	return nil
 }
