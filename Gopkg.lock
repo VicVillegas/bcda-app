@@ -51,6 +51,14 @@
   version = "v1.0.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:8644ed5f70fd23ae2e29240887cc81dc1e90dcbace669fac86c8d73dea8653b4"
+  name = "github.com/bombsimon/gorm-bulk"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "dbd7b083af03c201877b253541bcadab2cc2b86f"
+
+[[projects]]
   digest = "1:a2c1d0e43bd3baaa071d1b9ed72c27d78169b2b269f71c105ac4ba34b1be4a39"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -272,14 +280,6 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:c23351440f9d2affc0383224880063d8e5d770fd26806caaefce4ec64ec3f613"
-  name = "github.com/t-tiger/gorm-bulk-insert"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "9f37f726f5b1cb8b7499e8d2a05fd3041715ed94"
-
-[[projects]]
-  branch = "master"
   digest = "1:be87c1e6f0a15e5b1c45036b9382cdd63057a8b65e10ff2fe2bda23886a99c6a"
   name = "github.com/tsenart/go-tsz"
   packages = [
@@ -378,6 +378,7 @@
     "github.com/aws/aws-sdk-go/aws/session",
     "github.com/aws/aws-sdk-go/service/cloudwatch",
     "github.com/bgentry/que-go",
+    "github.com/bombsimon/gorm-bulk",
     "github.com/dgrijalva/jwt-go",
     "github.com/eug48/fhir/models",
     "github.com/go-chi/chi",
@@ -397,7 +398,6 @@
     "github.com/stretchr/testify/mock",
     "github.com/stretchr/testify/require",
     "github.com/stretchr/testify/suite",
-    "github.com/t-tiger/gorm-bulk-insert",
     "github.com/tsenart/vegeta/lib",
     "github.com/tsenart/vegeta/lib/plot",
     "github.com/urfave/cli",

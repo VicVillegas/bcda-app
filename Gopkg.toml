@@ -55,4 +55,4 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/t-tiger/gorm-bulk-insert"
+  name = "github.com/bombsimon/gorm-bulk"

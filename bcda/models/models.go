@@ -20,6 +20,7 @@ import (
 	"github.com/CMSgov/bcda-app/bcda/utils"
 	"github.com/bgentry/que-go"
 	"github.com/jinzhu/gorm"
+	gormbulk "github.com/bombsimon/gorm-bulk"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -527,6 +528,66 @@ func (cclfBeneficiary *CCLFBeneficiary) GetBlueButtonID(bb client.APIClient) (bl
 	}
 
 	return blueButtonID, nil
+}
+
+func CCLFBeneficiariesToInterfaceSlice(cclfBeneficiaries []CCLFBeneficiary) []interface{} {
+	type cclfBeneficiary struct {
+		ID				uint
+		FileID			uint
+		HICN			string
+		MBI				string
+		BlueButtonID	string
+	}
+
+	var interfaces = make([]interface{}, len(cclfBeneficiaries))
+	for i := range cclfBeneficiaries {
+		b := cclfBeneficiary{}
+		b.FileID = cclfBeneficiaries[i].FileID
+		b.HICN = cclfBeneficiaries[i].HICN
+		b.MBI = cclfBeneficiaries[i].MBI
+		b.BlueButtonID = cclfBeneficiaries[i].BlueButtonID
+		interfaces[i] = b
+	}
+	return interfaces
+}
+
+func BulkUpdateCCLFBeneficiaresBBID(db *gorm.DB, cclfBeneficiaries []CCLFBeneficiary) error {
+	// Convert []CCLFBeneficiary to []interface{} for other bulk functions
+	cclfBenesAsInterface := CCLFBeneficiariesToInterfaceSlice(cclfBeneficiaries)
+
+	db = db.Model(&CCLFBeneficiary{}).
+		Set(
+			"gorm:insert_option",
+			"ON CONFLICT (id) DO UPDATE SET blue_button_id = excluded.blue_button_id",
+		)
+
+	if err := gormbulk.BulkInsert(db, cclfBenesAsInterface); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func BulkInsertCCLFBeneficiares(beneficiaries []CCLFBeneficiary) error {
+	db := database.GetGORMDbConnection()
+	defer database.Close(db)
+
+	gbParam := CCLFBeneficiariesToInterfaceSlice(beneficiaries)
+
+	db = db.Model(&CCLFBeneficiary{}).
+		Set(
+			"gorm:insert_option",
+			"ON CONFLICT (id) DO UPDATE SET file_id = excluded.file_id, mbi = excluded.mbi, hicn = excluded.hicn",
+		)
+
+	err := gormbulk.BulkInsert(db, gbParam)
+	if err != nil {
+		fmt.Println("Could not create CCLF8 beneficiary records.")
+		err = errors.Wrap(err, "could not create CCLF8 beneficiary records")
+		log.Error(err)
+		return err
+	}
+	return nil
 }
 
 // This is not a persistent model so it is not necessary to include in GORM auto migrate.

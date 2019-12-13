@@ -15,7 +15,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	gormbulk "github.com/t-tiger/gorm-bulk-insert"
 
 	"github.com/CMSgov/bcda-app/bcda/constants"
 	"github.com/CMSgov/bcda-app/bcda/database"
@@ -138,24 +137,11 @@ func importCCLF0(fileMetadata *cclfFileMetadata) (map[string]cclfFileValidator, 
 	return validator, nil
 }
 
-func saveBeneficiaries(beneficiaries []interface{}) error {
-	db := database.GetGORMDbConnection()
-	defer database.Close(db)
-
-	// Maximum batch size of 3000 recommended by library developer
-	err := gormbulk.BulkInsert(db, beneficiaries, 3000, "CCLFFile")
-	if err != nil {
-		fmt.Println("Could not create CCLF8 beneficiary records.")
-		err = errors.Wrap(err, "could not create CCLF8 beneficiary records")
-		log.Error(err)
-		return err
-	}
-	return nil
-}
-
 func importCCLF8(fileMetadata *cclfFileMetadata) error {
+	// Setting the number of records to be updated in a single batch to the number of records after which a status update is printed
+	updateBatchSize := utils.GetEnvInt("CCLF_IMPORT_STATUS_RECORDS_INTERVAL", 1000)
 	// Using []interface{} because it's required by gormbulk
-	var beneBuffer []interface{}
+	var beneBuffer []models.CCLFBeneficiary
 
 	err := importCCLF(fileMetadata, func(fileID uint, b []byte, db *gorm.DB) error {
 		const (
@@ -168,10 +154,9 @@ func importCCLF8(fileMetadata *cclfFileMetadata) error {
 			HICN:   string(bytes.TrimSpace(b[hicnStart:hicnEnd])),
 		}
 		beneBuffer = append(beneBuffer, cclfBeneficiary)
-		// Using maximum batch size recommended by library
-		if len(beneBuffer) == 3000 {
-			err := saveBeneficiaries(beneBuffer)
-			beneBuffer = []interface{}{}
+		if len(beneBuffer) == updateBatchSize {
+			err := models.BulkInsertCCLFBeneficiares(beneBuffer)
+			beneBuffer = []models.CCLFBeneficiary{}
 			return err
 		}
 		return nil
@@ -183,7 +168,7 @@ func importCCLF8(fileMetadata *cclfFileMetadata) error {
 	}
 
 	// Save any remaining beneficiaries
-	err = saveBeneficiaries(beneBuffer)
+	err = models.BulkInsertCCLFBeneficiares(beneBuffer)
 	if err != nil {
 		updateImportStatus(fileMetadata, constants.ImportFail)
 		return err
