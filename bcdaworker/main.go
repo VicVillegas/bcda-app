@@ -32,6 +32,7 @@ import (
 var (
 	qc  *que.Client
 	txn newrelic.Transaction
+	updateBatchSize int
 )
 
 type jobEnqueueArgs struct {
@@ -47,6 +48,8 @@ func init() {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetReportCaller(true)
 	filePath := os.Getenv("BCDA_WORKER_ERROR_LOG")
+
+	updateBatchSize = utils.GetEnvInt("UPDATE_BATCH_SIZE", 3000)
 
 	/* #nosec -- 0640 permissions required for Splunk ingestion */
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
@@ -168,6 +171,9 @@ func createDir(path string) error {
 }
 
 func writeBBDataToFile(bb client.APIClient, acoID string, acoCMSID string, cclfBeneficiaryIDs []string, jobID, t string) (fileUUID string, error error) {
+	db := database.GetGORMDbConnection()
+	defer db.Close()
+	bbIdUpdateBatch := []models.CCLFBeneficiary{}
 	segment := newrelic.StartSegment(txn, "writeBBDataToFile")
 
 	if bb == nil {
@@ -205,16 +211,21 @@ func writeBBDataToFile(bb client.APIClient, acoID string, acoCMSID string, cclfB
 	failThreshold := getFailureThreshold()
 	failed := false
 
-	for _, cclfBeneficiaryID := range cclfBeneficiaryIDs {
-		blueButtonID, err := beneBBID(cclfBeneficiaryID, bb)
+	for i := range cclfBeneficiaryIDs {
+		blueButtonID, databaseID, err := beneBBID(cclfBeneficiaryIDs[i], bb)
 		if err != nil {
-			handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving BlueButton ID for cclfBeneficiary %s", cclfBeneficiaryID), jobID)
+			handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving BlueButton ID for cclfBeneficiary %s", cclfBeneficiaryIDs[i]), jobID)
 		} else {
+			if databaseID != 0 {
+				bene := models.CCLFBeneficiary{BlueButtonID: blueButtonID}
+				bene.ID = databaseID
+				bbIdUpdateBatch = append(bbIdUpdateBatch, bene)
+			}
 			pData, err := bbFunc(blueButtonID, jobID, acoCMSID)
 			if err != nil {
 				handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving %s for beneficiary %s in ACO %s", t, blueButtonID, acoID), jobID)
 			} else {
-				fhirBundleToResourceNDJSON(w, pData, t, cclfBeneficiaryID, acoCMSID, jobID, fileUUID)
+				fhirBundleToResourceNDJSON(w, pData, t, cclfBeneficiaryIDs[i], acoCMSID, jobID, fileUUID)
 			}
 		}
 		failPct := (float64(errorCount) / totalBeneIDs) * 100
@@ -222,6 +233,15 @@ func writeBBDataToFile(bb client.APIClient, acoID string, acoCMSID string, cclfB
 			failed = true
 			break
 		}
+		if i == updateBatchSize {
+			if err = models.BulkUpdateCCLFBeneficiaresBBID(db, bbIdUpdateBatch); err != nil {
+				log.Error(err)
+			}
+		}
+	}
+
+	if err = models.BulkUpdateCCLFBeneficiaresBBID(db, bbIdUpdateBatch); err != nil {
+		log.Error(err)
 	}
 
 	err = w.Flush()
@@ -249,8 +269,9 @@ func bbFuncByType(bb client.APIClient, t string) client.BeneDataFunc {
 	}[t]
 }
 
-// beneBBID returns the beneficiary's Blue Button ID. If not already in the BCDA database, the ID value is retrieved from BB and saved.
-func beneBBID(cclfBeneID string, bb client.APIClient) (string, error) {
+// beneBBID returns the beneficiary's Blue Button ID. If not already in the BCDA database, the ID value is retrieved from BB and
+// the database ID returned so the caller can save the updates in batches.
+func beneBBID(cclfBeneID string, bb client.APIClient) (string, uint, error) {
 	db := database.GetGORMDbConnection()
 	defer db.Close()
 
@@ -258,13 +279,10 @@ func beneBBID(cclfBeneID string, bb client.APIClient) (string, error) {
 	db.First(&cclfBeneficiary, cclfBeneID)
 	bbID, err := cclfBeneficiary.GetBlueButtonID(bb)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	cclfBeneficiary.BlueButtonID = bbID
-	db.Save(&cclfBeneficiary)
-
-	return bbID, nil
+	return bbID, cclfBeneficiary.ID, nil
 }
 
 func handleBBError(err error, errorCount *int, fileUUID, msg, jobID string) {
