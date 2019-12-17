@@ -257,7 +257,7 @@ func beneBBID(cclfBeneID string, bb client.APIClient) (string, error) {
 	var cclfBeneficiary models.CCLFBeneficiary
 	db.First(&cclfBeneficiary, cclfBeneID)
 	
-        // If BB ID is set already, just give it back
+	// If BB ID is set already, just give it back
 	if cclfBeneficiary.BlueButtonID != "" {
 		return cclfBeneficiary.BlueButtonID, nil
 	}        
