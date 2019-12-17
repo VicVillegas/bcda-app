@@ -256,13 +256,20 @@ func beneBBID(cclfBeneID string, bb client.APIClient) (string, error) {
 
 	var cclfBeneficiary models.CCLFBeneficiary
 	db.First(&cclfBeneficiary, cclfBeneID)
+	
+        // If BB ID is set already, just give it back
+	if cclfBeneficiary.BlueButtonID != "" {
+		return cclfBeneficiary.BlueButtonID, nil
+	}        
+
+        // Otherwise, retrieve it from BB 
 	bbID, err := cclfBeneficiary.GetBlueButtonID(bb)
 	if err != nil {
 		return "", err
 	}
 
-	cclfBeneficiary.BlueButtonID = bbID
-	db.Save(&cclfBeneficiary)
+        // Update DB
+	db.Model(&cclfBeneficiary).Update("blue_button_id", bbID)
 
 	return bbID, nil
 }

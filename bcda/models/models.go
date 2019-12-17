@@ -477,12 +477,7 @@ type Suppression struct {
 // This method will ensure that a valid BlueButton ID is returned.
 // If you use cclfBeneficiary.BlueButtonID you will not be guaranteed a valid value
 func (cclfBeneficiary *CCLFBeneficiary) GetBlueButtonID(bb client.APIClient) (blueButtonID string, err error) {
-	// If this is set already, just give it back.
-	if cclfBeneficiary.BlueButtonID != "" {
-		return cclfBeneficiary.BlueButtonID, nil
-	}
-
-	// didn't find a local value, need to ask BlueButton
+	// request BBID from BB
 	hashedHICN := client.HashHICN(cclfBeneficiary.HICN)
 	jsonData, err := bb.GetPatientByHICNHash(hashedHICN)
 	if err != nil {

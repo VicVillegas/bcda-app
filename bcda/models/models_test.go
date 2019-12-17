@@ -919,12 +919,5 @@ func (s *ModelsTestSuite) TestGetBlueButtonID() {
 	assert.Nil(err)
 	assert.Equal("BB_VALUE", blueButtonID)
 
-	// trivial case.  The object has a BB ID set on it already, this does nothing
-	cclfBeneficiary.BlueButtonID = "LOCAL_VAL"
-	blueButtonID, err = cclfBeneficiary.GetBlueButtonID(&bbc)
-	assert.Nil(err)
-	assert.Equal("LOCAL_VAL", blueButtonID)
-
-	// Should be making only a single call to BB for all 2 attempts.
 	bbc.AssertNumberOfCalls(s.T(), "GetPatientByHICNHash", 1)
 }
