@@ -262,13 +262,13 @@ func beneBBID(cclfBeneID string, bb client.APIClient) (string, error) {
 		return cclfBeneficiary.BlueButtonID, nil
 	}        
 
-        // Otherwise, retrieve it from BB 
+	// Otherwise, retrieve it from BB 
 	bbID, err := cclfBeneficiary.GetBlueButtonID(bb)
 	if err != nil {
 		return "", err
 	}
 
-        // Update DB
+	// Update DB
 	db.Model(&cclfBeneficiary).Update("blue_button_id", bbID)
 
 	return bbID, nil
