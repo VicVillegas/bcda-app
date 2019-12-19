@@ -126,37 +126,41 @@ func (job *Job) GetEnqueJobs(t string) (enqueJobs []*que.Job, err error) {
 	}
 
 	// includeSuppressed = false to exclude beneficiaries who have opted out of data sharing
-	beneficiaries, err := aco.GetBeneficiaries(false)
+	_, beneficiaries, err := aco.GetBeneficiaries(false)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, b := range beneficiaries {
-		rowCount++
-		jobIDs = append(jobIDs, fmt.Sprint(b.ID))
-		if len(jobIDs) >= maxBeneficiaries || rowCount >= len(beneficiaries) {
-
-			args, err := json.Marshal(jobEnqueueArgs{
-				ID:             int(job.ID),
-				ACOID:          job.ACOID.String(),
-				UserID:         job.UserID.String(),
-				BeneficiaryIDs: jobIDs,
-				ResourceType:   t,
-			})
-			if err != nil {
-				return nil, err
-			}
-
-			j := &que.Job{
-				Type: "ProcessJob",
-				Args: args,
-			}
-
-			enqueJobs = append(enqueJobs, j)
-
-			jobIDs = []string{}
+	var chunkedBeneficiaries [][] string
+	for i := 0; i < len(beneficiaries); i += maxBeneficiaries {
+		end := i + maxBeneficiaries
+		if end > len(beneficiaries) {
+			end = len(beneficiaries)
 		}
+		chunkedBeneficiaries = append(chunkedBeneficiaries, beneficiaries[i:end])
 	}
+	
+	for _, b_groups := range chunkedBeneficiaries {
+		args, err := json.Marshal(jobEnqueueArgs{
+			ID:             int(job.ID),
+			ACOID:          job.ACOID.String(),
+			UserID:         job.UserID.String(),
+			BeneficiaryIDs: b_groups,
+			ResourceType:   t,
+		})
+		if err != nil {
+			return nil, err
+		}
+		j := &que.Job{
+			Type: "ProcessJob",
+			Args: args,
+		}
+
+		enqueJobs = append(enqueJobs, j)
+
+		jobIDs = []string{}
+	}
+
 	return enqueJobs, nil
 }
 
@@ -214,25 +218,10 @@ type ACO struct {
 	PublicKey   string    `json:"public_key"`
 }
 
-func (aco *ACO) GetBeneficiaryIDs(includeSuppressed bool) (cclfBeneficiaryIDs []string, err error) {
-	cclfBeneficiaries, err := aco.GetBeneficiaries(includeSuppressed)
-	if err != nil {
-		return nil, err
-	}
-	if cclfBeneficiaries == nil {
-		return cclfBeneficiaryIDs, nil
-	}
-
-	for _, b := range cclfBeneficiaries {
-		cclfBeneficiaryIDs = append(cclfBeneficiaryIDs, fmt.Sprint(b.ID))
-	}
-
-	return cclfBeneficiaryIDs, nil
-}
-
 // GetBeneficiaries retrieves beneficiaries associated with the ACO.
-func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, error) {
+func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []string, error) {
 	var cclfBeneficiaries []CCLFBeneficiary
+	var cclfBeneficiaryIds []string
 
 	if aco.CMSID == nil {
 		log.Errorf("No CMSID set for ACO: %s", aco.UUID)
@@ -275,7 +264,21 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, err
 		return nil, fmt.Errorf("found 0 beneficiaries from latest CCLF8 file for ACO ID %s", aco.UUID.String())
 	}
 
-	return cclfBeneficiaries, nil
+        if suppressedHICNs != nil {
+                err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaryIds, "file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
+        } else {
+                err = db.Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
+        }
+
+        if err != nil {
+                log.Errorf("Error retrieving beneficiary IDs from latest CCLF8 file for ACO ID %s: %s", aco.UUID.String(), err.Error())
+                return nil, err
+        } else if len(cclfBeneficiaryIds) == 0 {
+                log.Errorf("Found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
+                return nil, fmt.Errorf("found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
+        }
+
+	return cclfBeneficiaries, cclfBeneficiaryIds, nil
 }
 
 type CCLFBeneficiaryXref struct {

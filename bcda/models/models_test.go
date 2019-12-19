@@ -638,37 +638,45 @@ func (s *ModelsTestSuite) TestGetBeneficiaries() {
 
 	err := s.db.Find(&aco, "UUID = ?", acoUUID).Error
 	assert.Nil(err)
-	beneficiaries, err := aco.GetBeneficiaries(true)
+	beneficiaries, beneficiaryIds, err := aco.GetBeneficiaries(true)
 	assert.Nil(err)
 	assert.NotNil(beneficiaries)
 	assert.Equal(50, len(beneficiaries))
+        assert.NotNil(beneficiaryIds)
+        assert.Equal(50, len(beneficiaryIds))
 
 	// small ACO has 10 benes
 	acoUUID = uuid.Parse(constants.SmallACOUUID)
 	err = s.db.Debug().Find(&smallACO, "UUID = ?", acoUUID).Error
 	assert.Nil(err)
-	beneficiaries, err = smallACO.GetBeneficiaries(true)
+	beneficiaries, beneficiaryIds, err = smallACO.GetBeneficiaries(true)
 	assert.Nil(err)
 	assert.NotNil(beneficiaries)
 	assert.Equal(10, len(beneficiaries))
+        assert.NotNil(beneficiaryIds)
+        assert.Equal(10, len(beneficiaryIds))
 
 	// Medium ACO has 25 benes
 	acoUUID = uuid.Parse(constants.MediumACOUUID)
 	err = s.db.Find(&mediumACO, "UUID = ?", acoUUID).Error
 	assert.Nil(err)
-	beneficiaries, err = mediumACO.GetBeneficiaries(true)
+	beneficiaries, beneficiaryIds, err = mediumACO.GetBeneficiaries(true)
 	assert.Nil(err)
 	assert.NotNil(beneficiaries)
 	assert.Equal(25, len(beneficiaries))
+        assert.NotNil(beneficiaryIds)
+        assert.Equal(25, len(beneficiaryIds))
 
 	// Large ACO has 100 benes
 	acoUUID = uuid.Parse(constants.LargeACOUUID)
 	err = s.db.Find(&largeACO, "UUID = ?", acoUUID).Error
 	assert.Nil(err)
-	beneficiaries, err = largeACO.GetBeneficiaries(true)
+	beneficiaries, beneficiaryIds, err = largeACO.GetBeneficiaries(true)
 	assert.Nil(err)
 	assert.NotNil(beneficiaries)
 	assert.Equal(100, len(beneficiaries))
+        assert.NotNil(beneficiaryIds)
+        assert.Equal(100, len(beneficiaryIds))
 
 }
 
@@ -725,10 +733,12 @@ func (s *ModelsTestSuite) TestGetBeneficiaries_DuringETL() {
 	}
 	defer s.db.Unscoped().Delete(&bene3)
 
-	result, err := aco.GetBeneficiaries(false)
+	result, beneficiaryIds, err := aco.GetBeneficiaries(false)
 	assert.Nil(s.T(), err)
 	assert.Len(s.T(), result, 1)
+	assert.Len(s.T(), beneficiaryIds, 1)
 	assert.Equal(s.T(),cclfFile.ID,result[0].FileID)
+	assert.Equals(s.T(), result[0].ID, beneficiaryIds[0])
 }
 
 func (s *ModelsTestSuite) TestGetBeneficiaries_Unsuppressed() {
@@ -895,14 +905,20 @@ func (s *ModelsTestSuite) TestGetBeneficiaries_Unsuppressed() {
 	}
 	defer s.db.Unscoped().Delete(&bene8Suppression3)
 
-	result, err := aco.GetBeneficiaries(false)
+	result, beneficiaryIds, err := aco.GetBeneficiaries(false)
 	assert.Nil(s.T(), err)
 	assert.Len(s.T(), result, 5)
+	assert.Len(s.T(), beneficiaryIds, 5)
 	assert.Equal(s.T(), bene2.ID, result[0].ID)
 	assert.Equal(s.T(), bene3.ID, result[1].ID)
 	assert.Equal(s.T(), bene4.ID, result[2].ID)
 	assert.Equal(s.T(), bene6.ID, result[3].ID)
 	assert.Equal(s.T(), bene7.ID, result[4].ID)
+        assert.Equal(s.T(), bene2.ID, beneficiaryIds[0])
+        assert.Equal(s.T(), bene3.ID, beneficiaryIds[1])
+        assert.Equal(s.T(), bene4.ID, beneficiaryIds[2])
+        assert.Equal(s.T(), bene6.ID, beneficiaryIds[3])
+        assert.Equal(s.T(), bene7.ID, beneficiaryIds[4])
 }
 
 func (s *ModelsTestSuite) TestGetBlueButtonID() {
