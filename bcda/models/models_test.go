@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -738,7 +739,7 @@ func (s *ModelsTestSuite) TestGetBeneficiaries_DuringETL() {
 	assert.Len(s.T(), result, 1)
 	assert.Len(s.T(), beneficiaryIds, 1)
 	assert.Equal(s.T(),cclfFile.ID,result[0].FileID)
-	assert.Equal(s.T(), result[0].ID, beneficiaryIds[0])
+	assert.Equal(s.T(), fmt.Sprint(result[0].ID), beneficiaryIds[0])
 }
 
 func (s *ModelsTestSuite) TestGetBeneficiaries_Unsuppressed() {
@@ -914,11 +915,11 @@ func (s *ModelsTestSuite) TestGetBeneficiaries_Unsuppressed() {
 	assert.Equal(s.T(), bene4.ID, result[2].ID)
 	assert.Equal(s.T(), bene6.ID, result[3].ID)
 	assert.Equal(s.T(), bene7.ID, result[4].ID)
-        assert.Equal(s.T(), bene2.ID, beneficiaryIds[0])
-        assert.Equal(s.T(), bene3.ID, beneficiaryIds[1])
-        assert.Equal(s.T(), bene4.ID, beneficiaryIds[2])
-        assert.Equal(s.T(), bene6.ID, beneficiaryIds[3])
-        assert.Equal(s.T(), bene7.ID, beneficiaryIds[4])
+        assert.Equal(s.T(), fmt.Sprint(bene2.ID), beneficiaryIds[0])
+        assert.Equal(s.T(), fmt.Sprint(bene3.ID), beneficiaryIds[1])
+        assert.Equal(s.T(), fmt.Sprint(bene4.ID), beneficiaryIds[2])
+        assert.Equal(s.T(), fmt.Sprint(bene6.ID), beneficiaryIds[3])
+        assert.Equal(s.T(), fmt.Sprint(bene7.ID), beneficiaryIds[4])
 }
 
 func (s *ModelsTestSuite) TestGetBlueButtonID() {

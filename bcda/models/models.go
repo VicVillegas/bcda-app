@@ -215,10 +215,12 @@ type ACO struct {
 }
 
 // GetBeneficiaries retrieves beneficiaries associated with the ACO.
+// Two arrays are returned, for flexibility in function usage:
+// One array contains the full CCLFBeneficiary model, fully populated
+// The other array contains only the beneficiaries' IDs (in string format)
 func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []string, error) {
 	var cclfBeneficiaries []CCLFBeneficiary
 	var cclfBeneficiaryIds []string
-	var intBeneficiaryIds []int
 
 	if aco.CMSID == nil {
 		log.Errorf("No CMSID set for ACO: %s", aco.UUID)
@@ -249,8 +251,14 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []s
 	var err error
 	if suppressedHICNs != nil {
 		err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
+		if err == nil {
+			err = db.Table("cclf_beneficiaries").Not("hicn", suppressedHICNs).Select("id").Where("file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
+		}
 	} else {
 		err = db.Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
+		if err == nil {
+			err = db.Table("cclf_beneficiaries").Select("id").Where("file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
+		}
 	}
 
 	if err != nil {
@@ -259,25 +267,14 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []s
 	} else if len(cclfBeneficiaries) == 0 {
 		log.Errorf("Found 0 beneficiaries from latest CCLF8 file for ACO ID %s", aco.UUID.String())
 		return nil, nil, fmt.Errorf("found 0 beneficiaries from latest CCLF8 file for ACO ID %s", aco.UUID.String())
-	}
-
-        if suppressedHICNs != nil {
-		db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaryIds, "file_id = ?", cclfFile.ID).Pluck("id", &intBeneficiaryIds)
-                err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaryIds, "file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
-        } else {
-                err = db.Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
-        }
-
-	log.Errorf("Size of int array is %v", len(intBeneficiaryIds))
-	log.Errorf("Size of string array is %v", len(cclfBeneficiaryIds))
-
-        if err != nil {
-                log.Errorf("Error retrieving beneficiary IDs from latest CCLF8 file for ACO ID %s: %s", aco.UUID.String(), err.Error())
-                return nil, nil, err
-        } else if len(cclfBeneficiaryIds) == 0 {
+	} else if len(cclfBeneficiaryIds) == 0 {
                 log.Errorf("Found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
                 return nil, nil, fmt.Errorf("found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
+        } else if len(cclfBeneficiaries) != len(cclfBeneficiaryIds) {
+                log.Errorf("Beneficiary records do not match beneficiary ID records from latest CCLF8 file for ACO ID %s", aco.UUID.String())
+                return nil, nil, fmt.Errorf("beneficiary records do not match beneficiary ID records from latest CCLF8 file for ACO ID %s", aco.UUID.String())
         }
+	
 
 	return cclfBeneficiaries, cclfBeneficiaryIds, nil
 }
