@@ -110,8 +110,6 @@ func (job *Job) CheckCompletedAndCleanup() (bool, error) {
 }
 
 func (job *Job) GetEnqueJobs(t string) (enqueJobs []*que.Job, err error) {
-	var jobIDs []string
-	var rowCount = 0
 	maxBeneficiaries, err := GetMaxBeneCount(t)
 	if err != nil {
 		return nil, err
@@ -157,8 +155,6 @@ func (job *Job) GetEnqueJobs(t string) (enqueJobs []*que.Job, err error) {
 		}
 
 		enqueJobs = append(enqueJobs, j)
-
-		jobIDs = []string{}
 	}
 
 	return enqueJobs, nil
@@ -222,10 +218,11 @@ type ACO struct {
 func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []string, error) {
 	var cclfBeneficiaries []CCLFBeneficiary
 	var cclfBeneficiaryIds []string
+	var intBeneficiaryIds []int
 
 	if aco.CMSID == nil {
 		log.Errorf("No CMSID set for ACO: %s", aco.UUID)
-		return cclfBeneficiaries, fmt.Errorf("no CMS ID set for this ACO")
+		return cclfBeneficiaries, cclfBeneficiaryIds, fmt.Errorf("no CMS ID set for this ACO")
 	}
 	db := database.GetGORMDbConnection()
 	defer database.Close(db)
@@ -233,7 +230,7 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []s
 	// todo add a filter here to make sure the file is up to date.
 	if db.Where("aco_cms_id = ? and cclf_num = 8 and import_status= ?", aco.CMSID, constants.ImportComplete).Order("timestamp desc").First(&cclfFile).RecordNotFound() {
 		log.Errorf("Unable to find CCLF8 File for ACO: %v", *aco.CMSID)
-		return cclfBeneficiaries, fmt.Errorf("unable to find cclfFile")
+		return cclfBeneficiaries, cclfBeneficiaryIds, fmt.Errorf("unable to find cclfFile")
 	}
 
 	var suppressedHICNs []string
@@ -258,24 +255,28 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, []s
 
 	if err != nil {
 		log.Errorf("Error retrieving beneficiaries from latest CCLF8 file for ACO ID %s: %s", aco.UUID.String(), err.Error())
-		return nil, err
+		return nil, nil, err
 	} else if len(cclfBeneficiaries) == 0 {
 		log.Errorf("Found 0 beneficiaries from latest CCLF8 file for ACO ID %s", aco.UUID.String())
-		return nil, fmt.Errorf("found 0 beneficiaries from latest CCLF8 file for ACO ID %s", aco.UUID.String())
+		return nil, nil, fmt.Errorf("found 0 beneficiaries from latest CCLF8 file for ACO ID %s", aco.UUID.String())
 	}
 
         if suppressedHICNs != nil {
+		db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaryIds, "file_id = ?", cclfFile.ID).Pluck("id", &intBeneficiaryIds)
                 err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaryIds, "file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
         } else {
                 err = db.Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Pluck("id", &cclfBeneficiaryIds).Error
         }
 
+	log.Errorf("Size of int array is %v", len(intBeneficiaryIds))
+	log.Errorf("Size of string array is %v", len(cclfBeneficiaryIds))
+
         if err != nil {
                 log.Errorf("Error retrieving beneficiary IDs from latest CCLF8 file for ACO ID %s: %s", aco.UUID.String(), err.Error())
-                return nil, err
+                return nil, nil, err
         } else if len(cclfBeneficiaryIds) == 0 {
                 log.Errorf("Found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
-                return nil, fmt.Errorf("found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
+                return nil, nil, fmt.Errorf("found 0 beneficiary IDs from latest CCLF8 file for ACO ID %s", aco.UUID.String())
         }
 
 	return cclfBeneficiaries, cclfBeneficiaryIds, nil

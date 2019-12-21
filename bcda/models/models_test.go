@@ -738,7 +738,7 @@ func (s *ModelsTestSuite) TestGetBeneficiaries_DuringETL() {
 	assert.Len(s.T(), result, 1)
 	assert.Len(s.T(), beneficiaryIds, 1)
 	assert.Equal(s.T(),cclfFile.ID,result[0].FileID)
-	assert.Equals(s.T(), result[0].ID, beneficiaryIds[0])
+	assert.Equal(s.T(), result[0].ID, beneficiaryIds[0])
 }
 
 func (s *ModelsTestSuite) TestGetBeneficiaries_Unsuppressed() {
