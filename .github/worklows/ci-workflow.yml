@@ -1,0 +1,17 @@
+name: BCDA CI Workflow
+
+on: [push]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build the stack
+        run: make docker-bootstrap
+  test:
+     name: Test
+     runs-on: ubuntu-latest
+     steps: 
+      - name: Run all tests
+         run: make test
