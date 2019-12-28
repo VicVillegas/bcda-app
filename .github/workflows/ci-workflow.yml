@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   build:
-    name: "Build"
+    name: "Build and Test"
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout code"
@@ -12,11 +12,6 @@ jobs:
       - name: "Build the stack"
         run: |
           make docker-bootstrap
-  test:
-     name: "Test"
-     runs-on: ubuntu-latest
-     needs: build
-     steps:
-       - name: "Run all tests"
-         run: | 
-           make test
+      - name: "Run all tests"
+        run: |
+          make test
