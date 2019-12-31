@@ -181,17 +181,30 @@ func bulkRequest(resourceTypes []string, w http.ResponseWriter, r *http.Request)
                 return
         }
 
-	for _, j := range enqueueJobs {
-		if err = qc.Enqueue(j); err != nil {
-			log.Error(err)
-			oo := responseutils.CreateOpOutcome(responseutils.Error, responseutils.Exception, "", responseutils.Processing)
-			responseutils.WriteError(oo, w, http.StatusInternalServerError)
-			return
-		}
-	}
+	// Defer adding the jobs to the queue
+	// This ensures that the user is returned a response from the bulk data request before adding the jobs to the queue
+	// This is done so that the client user receives a response in a reasonable amount of time, because enqueuing jobs is expensive
+	defer persistJobs(enqueueJobs, &newJob)
 
 	w.Header().Set("Content-Location", fmt.Sprintf("%s://%s/api/v1/jobs/%d", scheme, r.Host, newJob.ID))
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func persistJobs(enqueueJobs []*que.Job, newJob *models.Job) {
+
+        db := database.GetGORMDbConnection()
+        defer database.Close(db)
+
+        for _, j := range enqueueJobs {
+                if err := qc.Enqueue(j); err != nil {
+                        log.Error(err)
+                        err = db.Model(&newJob).Update("status", "Failed").Error
+                        if err != nil {
+                                log.Error(err)
+                        }
+                        return
+                }
+        }
 }
 
 func check429(jobs []models.Job, types []string, w http.ResponseWriter) ([]string, bool) {
