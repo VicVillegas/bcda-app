@@ -162,38 +162,60 @@ func bulkRequest(resourceTypes []string, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var enqueueJobs []*que.Job
-	for _, t := range resourceTypes {
-		jobs, err := newJob.GetEnqueJobs(t)
-		if err != nil {
-			log.Error(err)
-			oo := responseutils.CreateOpOutcome(responseutils.Error, responseutils.Exception, "", responseutils.Processing)
-			responseutils.WriteError(oo, w, http.StatusInternalServerError)
-			return
-		}
-		enqueueJobs = append(enqueueJobs, jobs...)
-	}
-
-        if db.Model(&newJob).Update("job_count", len(enqueueJobs)).Error != nil {
-                log.Error(err)
-                oo := responseutils.CreateOpOutcome(responseutils.Error, responseutils.Exception, "", responseutils.DbErr)
+	// before proceeding, let's validate that this ACO can be processed
+	var aco models.ACO
+	err = db.Find(&aco, "uuid = ?", newJob.ACOID).Error
+	if err != nil {
+                oo := responseutils.CreateOpOutcome(responseutils.Error, responseutils.Exception, "", responseutils.Processing)
                 responseutils.WriteError(oo, w, http.StatusInternalServerError)
-                return
-        }
+		return
+	}
+	
+	_, err = aco.GetBeneficiaries(false)
+	if err != nil {
+		log.Error(err)
+		oo := responseutils.CreateOpOutcome(responseutils.Error, responseutils.Exception, "", responseutils.Processing)
+		responseutils.WriteError(oo, w, http.StatusInternalServerError)
+		return
+	}
 
 	// Defer adding the jobs to the queue
 	// This ensures that the user is returned a response from the bulk data request before adding the jobs to the queue
 	// This is done so that the client user receives a response in a reasonable amount of time, because enqueuing jobs is expensive
-	defer persistJobs(enqueueJobs, &newJob)
+	defer persistJobs(resourceTypes, &newJob)
 
 	w.Header().Set("Content-Location", fmt.Sprintf("%s://%s/api/v1/jobs/%d", scheme, r.Host, newJob.ID))
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func persistJobs(enqueueJobs []*que.Job, newJob *models.Job) {
+func persistJobs(resourceTypes []string, newJob *models.Job) {
 
         db := database.GetGORMDbConnection()
         defer database.Close(db)
+
+        var enqueueJobs []*que.Job
+        for _, t := range resourceTypes {
+                jobs, err := newJob.GetEnqueJobs(t)
+                if err != nil {
+                        log.Error(err)
+			err = db.Model(&newJob).Update("status", "Failed").Error
+                        if err != nil {
+                                log.Error(err)
+                        }
+                        return
+                }
+                enqueueJobs = append(enqueueJobs, jobs...)
+        }
+
+	err := db.Model(&newJob).Update("job_count", len(enqueueJobs)).Error 
+	if err != nil {
+		log.Error(err)
+		err = db.Model(&newJob).Update("status", "Failed").Error
+		if err != nil {
+			log.Error(err)
+		}
+                return
+        }
 
         for _, j := range enqueueJobs {
                 if err := qc.Enqueue(j); err != nil {
