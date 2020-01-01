@@ -171,7 +171,7 @@ func bulkRequest(resourceTypes []string, w http.ResponseWriter, r *http.Request)
 		return
 	}
 	
-	_, err = aco.GetBeneficiaries(false)
+	_, err = aco.GetBeneficiaries(true)
 	if err != nil {
 		log.Error(err)
 		oo := responseutils.CreateOpOutcome(responseutils.Error, responseutils.Exception, "", responseutils.Processing)
