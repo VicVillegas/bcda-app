@@ -266,7 +266,8 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, err
 	log.Errorf("Check 2 is %s", check2.Sub(start))
 	var err error
 	if suppressedHICNs != nil {
-		err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
+		err = db.Where("hicn NOT IN (?)", suppressedHICNs).Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
+		//err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
 	} else {
 		err = db.Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
 	}
