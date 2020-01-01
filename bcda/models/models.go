@@ -241,12 +241,15 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, err
 	db := database.GetGORMDbConnection()
 	defer database.Close(db)
 	var cclfFile CCLFFile
+
+	start := time.Now()
 	// todo add a filter here to make sure the file is up to date.
 	if db.Where("aco_cms_id = ? and cclf_num = 8 and import_status= ?", aco.CMSID, constants.ImportComplete).Order("timestamp desc").First(&cclfFile).RecordNotFound() {
 		log.Errorf("Unable to find CCLF8 File for ACO: %v", *aco.CMSID)
 		return cclfBeneficiaries, fmt.Errorf("unable to find cclfFile")
 	}
-
+	check1 := time.Now()
+	log.Errorf("Check 1 is %s", check1.Sub(start))
 	var suppressedHICNs []string
 	if !includeSuppressed {
 		db.Raw(`SELECT DISTINCT s.hicn
@@ -259,13 +262,16 @@ func (aco *ACO) GetBeneficiaries(includeSuppressed bool) ([]CCLFBeneficiary, err
 			JOIN suppressions s ON s.hicn = h.hicn and s.effective_date = h.max_date
 			WHERE preference_indicator = 'N'`).Pluck("hicn", &suppressedHICNs)
 	}
-
+	check2 := time.Now()
+	log.Errorf("Check 2 is %s", check2.Sub(start))
 	var err error
 	if suppressedHICNs != nil {
 		err = db.Not("hicn", suppressedHICNs).Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
 	} else {
 		err = db.Find(&cclfBeneficiaries, "file_id = ?", cclfFile.ID).Error
 	}
+	check3 := time.Now()
+	log.Errorf("Check 3 is %s", check3.Sub(start)) 
 
 	if err != nil {
 		log.Errorf("Error retrieving beneficiaries from latest CCLF8 file for ACO ID %s: %s", aco.UUID.String(), err.Error())
