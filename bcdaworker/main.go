@@ -279,8 +279,7 @@ func beneBBID(cclfBeneficiary models.CCLFBeneficiary, bb client.APIClient) (stri
 
 	// Update the value in the DB only if necessary
 	if cclfBeneficiary.BlueButtonID != bbID {
-		cclfBeneficiary.BlueButtonID = bbID
-		db.Save(&cclfBeneficiary)
+		db.Model(&cclfBeneficiary).Update("blue_button_id", bbID)
 	}
 
 	return bbID, nil
