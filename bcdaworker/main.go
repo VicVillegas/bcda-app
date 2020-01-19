@@ -212,8 +212,13 @@ func writeBBDataToFile(bb client.APIClient, acoID string, acoCMSID string, cclfB
 		suppressedMap[val] = ""
 	}
 
-	for _, cclfBeneficiaryID := range cclfBeneficiaryIDs {
-		blueButtonID, err := beneBBID(cclfBeneficiaryID, bb)
+	db := database.GetGORMDbConnection()
+	defer db.Close()
+	var cclfBeneficiaries []models.CCLFBeneficiary
+	db.Where(cclfBeneficiaryIDs).Find(&cclfBeneficiaries)
+
+	for _, cclfBeneficiary := range cclfBeneficiaries {
+		blueButtonID, err := beneBBID(cclfBeneficiary, bb)
 
 		// skip over this cclf beneficiary if their blue button id is suppressed
 		if _, found := suppressedMap[blueButtonID]; found {
@@ -221,13 +226,13 @@ func writeBBDataToFile(bb client.APIClient, acoID string, acoCMSID string, cclfB
 		}
 		
 		if err != nil {
-			handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving BlueButton ID for cclfBeneficiary %s", cclfBeneficiaryID), jobID)
+			handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving BlueButton ID for cclfBeneficiary %v", cclfBeneficiary.ID), jobID)
 		} else {
 			pData, err := bbFunc(blueButtonID, jobID, acoCMSID)
 			if err != nil {
-				handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving %s for beneficiary %s in ACO %s", t, blueButtonID, acoID), jobID)
+				handleBBError(err, &errorCount, fileUUID, fmt.Sprintf("Error retrieving %s for beneficiary %v in ACO %s", t, blueButtonID, acoID), jobID)
 			} else {
-				fhirBundleToResourceNDJSON(w, pData, t, cclfBeneficiaryID, acoCMSID, jobID, fileUUID)
+				fhirBundleToResourceNDJSON(w, pData, t, cclfBeneficiary.ID, acoCMSID, jobID, fileUUID)
 			}
 		}
 		failPct := (float64(errorCount) / totalBeneIDs) * 100
@@ -263,19 +268,20 @@ func bbFuncByType(bb client.APIClient, t string) client.BeneDataFunc {
 }
 
 // beneBBID returns the beneficiary's Blue Button ID. If not already in the BCDA database, the ID value is retrieved from BB and saved.
-func beneBBID(cclfBeneID string, bb client.APIClient) (string, error) {
+func beneBBID(cclfBeneficiary models.CCLFBeneficiary, bb client.APIClient) (string, error) {
 	db := database.GetGORMDbConnection()
 	defer db.Close()
 
-	var cclfBeneficiary models.CCLFBeneficiary
-	db.First(&cclfBeneficiary, cclfBeneID)
 	bbID, err := cclfBeneficiary.GetBlueButtonID(bb)
 	if err != nil {
 		return "", err
 	}
 
-	cclfBeneficiary.BlueButtonID = bbID
-	db.Save(&cclfBeneficiary)
+	// Update the value in the DB only if necessary
+	if cclfBeneficiary.BlueButtonID != bbID {
+		cclfBeneficiary.BlueButtonID = bbID
+		db.Save(&cclfBeneficiary)
+	}
 
 	return bbID, nil
 }
@@ -329,14 +335,14 @@ func appendErrorToFile(fileUUID, code, detailsCode, detailsDisplay string, jobID
 	}
 }
 
-func fhirBundleToResourceNDJSON(w *bufio.Writer, jsonData, jsonType, beneficiaryID, acoID, jobID, fileUUID string) {
+func fhirBundleToResourceNDJSON(w *bufio.Writer, jsonData string, jsonType string, beneficiaryID uint, acoID string, jobID string, fileUUID string) {
 	segment := newrelic.StartSegment(txn, "fhirBundleToResourceNDJSON")
 
 	var jsonOBJ map[string]interface{}
 	err := json.Unmarshal([]byte(jsonData), &jsonOBJ)
 	if err != nil {
 		log.Error(err)
-		appendErrorToFile(fileUUID, responseutils.Exception, responseutils.InternalErr, fmt.Sprintf("Error unmarshaling %s resources from data for beneficiary %s in ACO %s", jsonType, beneficiaryID, acoID), jobID)
+		appendErrorToFile(fileUUID, responseutils.Exception, responseutils.InternalErr, fmt.Sprintf("Error unmarshaling %s resources from data for beneficiary %v in ACO %s", jsonType, beneficiaryID, acoID), jobID)
 		return
 	}
 	entries := jsonOBJ["entry"]
@@ -350,13 +356,13 @@ func fhirBundleToResourceNDJSON(w *bufio.Writer, jsonData, jsonType, beneficiary
 				// This is unlikely to happen because we just unmarshalled this data a few lines above.
 				if err != nil {
 					log.Error(err)
-					appendErrorToFile(fileUUID, responseutils.Exception, responseutils.InternalErr, fmt.Sprintf("Error marshaling %s to JSON for beneficiary %s in ACO %s", jsonType, beneficiaryID, acoID), jobID)
+					appendErrorToFile(fileUUID, responseutils.Exception, responseutils.InternalErr, fmt.Sprintf("Error marshaling %s to JSON for beneficiary %v in ACO %s", jsonType, beneficiaryID, acoID), jobID)
 					continue
 				}
 				_, err = w.WriteString(string(entryJSON) + "\n")
 				if err != nil {
 					log.Error(err)
-					appendErrorToFile(fileUUID, responseutils.Exception, responseutils.InternalErr, fmt.Sprintf("Error writing %s to file for beneficiary %s in ACO %s", jsonType, beneficiaryID, acoID), jobID)
+					appendErrorToFile(fileUUID, responseutils.Exception, responseutils.InternalErr, fmt.Sprintf("Error writing %s to file for beneficiary %v in ACO %s", jsonType, beneficiaryID, acoID), jobID)
 				}
 			}
 		}
