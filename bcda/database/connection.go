@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -13,28 +14,38 @@ import (
 // Variable substitution to support testing.
 var LogFatal = log.Fatal
 
+// Use singleton pattern to ensure one of each DB connection per instance
+var gormInstance *gorm.DB
+var dbInstance *sql.DB
+var gormOnce sync.Once
+var dbOnce synce.Once
+
 func GetDbConnection() *sql.DB {
-	databaseURL := os.Getenv("DATABASE_URL")
-	db, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		LogFatal(err)
-	}
-	pingErr := db.Ping()
-	if pingErr != nil {
-		LogFatal(pingErr)
-	}
-	return db
+	dbOnce.Do(func() {
+		databaseURL := os.Getenv("DATABASE_URL")
+		dbIntance, err := sql.Open("postgres", databaseURL)
+		if err != nil {
+			LogFatal(err)
+		}
+		pingErr := dbInstance.Ping()
+		if pingErr != nil {
+			LogFatal(pingErr)
+		}
+	})
+	return dbInstance
 }
 
 func GetGORMDbConnection() *gorm.DB {
-	databaseURL := os.Getenv("DATABASE_URL")
-	db, err := gorm.Open("postgres", databaseURL)
-	if err != nil {
-		LogFatal(err)
-	}
-	pingErr := db.DB().Ping()
-	if pingErr != nil {
-		LogFatal(pingErr)
-	}
-	return db
+        gormOnce.Do(func() {
+		databaseURL := os.Getenv("DATABASE_URL")
+		gormInstance, err := gorm.Open("postgres", databaseURL)
+		if err != nil {
+			LogFatal(err)
+		}
+		pingErr := gormInstance.DB().Ping()
+		if pingErr != nil {
+			LogFatal(pingErr)
+		}
+	})
+	return gormInstance
 }
